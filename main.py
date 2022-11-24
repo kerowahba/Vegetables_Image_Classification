@@ -2,6 +2,7 @@ import os
 import statistics
 from keras.utils import load_img
 from keras.utils import img_to_array
+
 import tensorflow as tf
 import torch
 import glob
@@ -31,7 +32,6 @@ start = timeit.default_timer()
 
 # checking for device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 # Transforms by doing Data Augmentation to make sure all images have the same size
 transformer = transforms.Compose([
     transforms.Resize((150, 150)),
@@ -90,13 +90,12 @@ train_test_set = torchvision.datasets.ImageFolder(entireDataset, transform=trans
 train_set_size = int(len(train_test_set) * 0.75)
 test_set_size = len(train_test_set) - train_set_size
 train_set, test_set = data.random_split(train_test_set, [train_set_size, test_set_size])
-
 # Prediction Train Model
 y_train = np.array([labels for images, labels in iter(train_set)])
 
 # Dataloader
-train_loader = DataLoader(train_set, shuffle=True, batch_size=256)
-test_loader = DataLoader(test_set, shuffle=True, batch_size=128)
+train_loader = DataLoader(train_set, shuffle=True, batch_size=32)
+test_loader = DataLoader(test_set, shuffle=True, batch_size=16)
 
 # Storing the different number of images for each class
 _, _, Bean_files = next(os.walk("Vegetables Image Classification/Train_Test_Dataset/Bean"))
@@ -225,14 +224,329 @@ def plot_result_aggregate(x_label, y_label, plot_title, tst_precision, tst_recal
     plt.savefig(fig_title)
     plt.clf()
 
+class CNN(nn.Module):
+    def __init__(self, num_classes=14):
+        super(CNN, self).__init__()
+
+        # Output size after convolution filter
+        # ((w-f+2P)/s) +1
+
+        # Input shape= (256,3,150,150)
+
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=3, stride=1, padding=1)
+        # Shape= (256,6,150,150)
+        self.bn1 = nn.BatchNorm2d(6)
+        # Shape= (256,6,150,150)
+        self.relu1 = nn.ReLU()
+        # Shape= (256,6,150,150)
+
+        self.pool = nn.MaxPool2d(kernel_size=2)
+        # Reduce the image size be factor 2
+        # Shape= (256,6,75,75)
+
+        self.conv2 = nn.Conv2d(in_channels=6, out_channels=12, kernel_size=3, stride=1, padding=1)
+        # Shape= (256,12,75,75)
+        self.relu2 = nn.ReLU()
+        # Shape= (256,12,75,75)
+
+        self.conv3 = nn.Conv2d(in_channels=12, out_channels=24, kernel_size=3, stride=1, padding=1)
+        # Shape= (256,24,75,75)
+        self.bn3 = nn.BatchNorm2d(24)
+        # Shape= (256,24,75,75)
+        self.relu3 = nn.ReLU()
+        # Shape= (256,24,75,75)
+
+        self.fc = nn.Linear(in_features=75 * 75 * 24, out_features=num_classes)
+
+        # Feed forward function
+
+    def forward(self, x):
+        # conv layers
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu1(x)
+
+        x = self.pool(x)
+
+        x = self.conv2(x)
+        x = self.relu2(x)
+
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = self.relu3(x)
+
+        # Above output will be in matrix form, with shape (256,32,75,75)
+        # flatten
+        x = x.view(-1, 24 * 75 * 75)
+        # fc layer
+        x = self.fc(x)
+
+        return x
 
 
+model = CNN(num_classes=14).to(device)
 
+# Optimizer and loss function
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+criterion = nn.CrossEntropyLoss()
 
+# Backprop and optimisation
+optimizer.zero_grad()
+optimizer.step()
 
+# calculating the size of training and testing images
+train_count = len(train_set + '/**/*')
+test_count = len(test_set + '/**/*')
+entireDataset_count = len(glob.glob(entireDataset + '/**/*'))
+print("\nNumber of entire Dataset: ", entireDataset_count, " Images")
+print("Number of Train Images: ", train_count, ", Number of Test Images: ", test_count, "\n")
 
+# Model training and saving best model
+best_accuracy = 0.0
 
+total_step = len(train_loader)
+best_actual_list = []
+best_prediciton_list = []
+loss_list = []
+acc_list = []
 
+# Hyper-parameters to the model
+num_epochs = 2
+learningRate = 0.001
+numberOfFolds = 10
+weight_decay = 0.0001
+batch_size = 64
 
+torch.manual_seed(0)
 
+net = NeuralNetClassifier(
+    model,
+    max_epochs=num_epochs,
+    lr=learningRate,
+    batch_size=batch_size,
+    optimizer=optim.Adam,
+    criterion=criterion,
+    device=device
+)
+print("// -------------------------------  Testing the tensor size, shape, and data matrix on the Model "
+      "before training it.  ------------------------------- //")
+print()
+net.fit(train_set, y=y_train)
+print()
 
+print("// -------------------------------  Training the Model with " + str(numberOfFolds) + " Folds, using "
+      + str(num_epochs), "Epochs ------------------------------- //")
+print()
+
+model.train()
+
+# Define the Score Metrics
+scoring = {'accuracy': make_scorer(accuracy_score, normalize=True),
+           'precision': make_scorer(precision_score, average='weighted'),
+           'recall': make_scorer(recall_score, average='weighted'),
+           'f1_score': make_scorer(f1_score, average="weighted")}
+
+# K-fold iterator to be passed to the cross validation function
+kf = KFold(n_splits=numberOfFolds, shuffle=True, random_state=0)
+
+# Passing the scores metric dictionary and the KFold iterator to the cross_validate training function
+train_sliceable = SliceDataset(train_set)
+scores = cross_validate(net, train_sliceable, y_train, cv=kf, scoring=scoring, error_score="raise",
+                        return_train_score=True)
+
+# All the required metrics
+# print()
+# print(scores.keys())
+# print()
+print(scores)
+# print()
+# print(scores['train_accuracy'])
+# print()
+# print(scores['test_accuracy'])
+
+# Looping through the dictionnary to produce a graph per fold
+n = 0
+for i in range(numberOfFolds):
+    n = n + 1
+    title_graph = "Train & Validation scores for fold#" + str(n)
+    plot_result_each_fold("Scores",
+                          "Value",
+                          title_graph,
+                          scores["test_precision"][n - 1],
+                          scores["test_recall"][n - 1],
+                          scores["test_f1_score"][n - 1],
+                          scores["test_accuracy"][n - 1],
+                          scores["train_precision"][n - 1],
+                          scores["train_recall"][n - 1],
+                          scores["train_f1_score"][n - 1],
+                          scores["train_accuracy"][n - 1],
+                          n)
+
+# Looping through the dictionnary to produce an aggregate
+n = 0
+agg_tr_prec = []
+agg_tr_rec = []
+agg_tr_acc = []
+agg_tr_f1 = []
+agg_tst_prec = []
+agg_tst_rec = []
+agg_tst_acc = []
+agg_tst_f1 = []
+
+for i in range(numberOfFolds):
+    n = n + 1
+    agg_tr_prec.append(scores["train_precision"][n - 1])
+    agg_tr_rec.append(scores["train_recall"][n - 1])
+    agg_tr_acc.append(scores["train_accuracy"][n - 1])
+    agg_tr_f1.append(scores["train_f1_score"][n - 1])
+    agg_tst_prec.append(scores["test_precision"][n - 1])
+    agg_tst_rec.append(scores["test_recall"][n - 1])
+    agg_tst_acc.append(scores["test_accuracy"][n - 1])
+    agg_tst_f1.append(scores["test_f1_score"][n - 1])
+
+title_graph = "Aggregate Train & Validation scores for " + str(numberOfFolds) + " folds"
+plot_result_aggregate("Scores",
+                      "Value",
+                      title_graph,
+                      statistics.mean(agg_tst_prec),
+                      statistics.mean(agg_tst_rec),
+                      statistics.mean(agg_tst_f1),
+                      statistics.mean(agg_tst_acc),
+                      statistics.mean(agg_tr_prec),
+                      statistics.mean(agg_tr_rec),
+                      statistics.mean(agg_tr_f1),
+                      statistics.mean(agg_tr_acc),
+                      numberOfFolds)
+
+# Displaying overall folds performance
+title_graph = "Scores comparaison across" + str(numberOfFolds) + " folds"
+plot_result_all_folds("Scores",
+                      "Value",
+                      title_graph,
+                      scores["train_accuracy"],
+                      scores["test_accuracy"],
+                      scores["train_precision"],
+                      scores["test_precision"],
+                      scores["train_recall"],
+                      scores["test_recall"],
+                      scores["train_f1_score"],
+                      scores["test_f1_score"],
+                      numberOfFolds)
+
+plt.figure(figsize=(18, 18))
+plot_confusion_matrix(net, train_set, y_train.reshape(-1, 1))
+plt.xlabel('Predicted Values', fontsize=10)
+plt.ylabel('Actual Values', fontsize=10)
+labels = ['Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
+                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                 'Papaya', 'Potato', 'Pumpkin', 'Radish']
+X_axis = np.arange(len(labels))
+
+plt.xticks(X_axis, labels)
+
+plt.savefig("Graphs/Confusion Matrix (Trained model)")
+plt.clf()
+print()
+
+for epoch in range(num_epochs):
+    print("// -----------------------------------  ", 'Epoch: ' + str(epoch + 1),
+          " for Testing Evaluation -----------------------------------  //")
+
+    model.eval()
+    test_accuracy = 0.0
+
+    actual_data = []
+    prediction_data = []
+
+    for i, (images, labels) in enumerate(test_loader):
+        if torch.cuda.is_available():
+            images = Variable(images.cuda())
+            labels = Variable(labels.cuda())
+
+        outputs = model(images)
+        _, prediction = torch.max(outputs.data, 1)
+        test_accuracy += int(torch.sum(prediction == labels.data))
+
+        # appending the data iterated on the current batch with the rest of the data
+        actual_data.append(labels.data.tolist())
+        prediction_data.append(prediction.tolist())
+
+    test_accuracy = test_accuracy / test_count
+
+    # Printing the train loss and the train accuracy
+    print()
+    # print('Train Loss: ' + str(train_loss) + ' Train Accuracy: ' + str(
+    #     train_accuracy*100) + '% Test Accuracy: ' + str(test_accuracy*100)+'%')
+    # print()
+
+    # formatting actual_data and prediction_data to remove inner lists [[4,5], [9]] => [4,5,9]
+    flat_list_actual = [x for xs in actual_data for x in xs]
+    flat_list_prediction = [x for xs in prediction_data for x in xs]
+
+    # Confusion Matrix
+    cm = confusion_matrix(flat_list_actual, flat_list_prediction)
+
+    # Classification Report
+    cr = classification_report(flat_list_actual, flat_list_prediction, labels=np.unique(flat_list_prediction))
+
+    print()
+    print("Classification report: ")
+    print(cr)
+    print()
+    print()
+
+    # Plot confusion_matrix
+    ax = sns.heatmap(cm, annot=True, cmap='Blues', fmt='g')
+    ax.set_title('Confusion Matrix for the different classifiers\n\n')
+    ax.set_xlabel('Predicted Values')
+    ax.set_ylabel('Actual Values ')
+    try:
+        ax.xaxis.set_ticklabels(['Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
+                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                 'Papaya', 'Potato', 'Pumpkin', 'Radish'])
+        ax.yaxis.set_ticklabels(['Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
+                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                 'Papaya', 'Potato', 'Pumpkin', 'Radish'])
+    except:
+        print()
+
+    plt.savefig("Graphs/Confusion Matrix (Epoch# " + str(epoch + 1) + ")", bbox_inches='tight')
+    plt.clf()
+
+    # Saving the best model so far, by comparing it with the test's accuracy from the previous models.
+    # Save the best model
+    if test_accuracy > best_accuracy:
+        torch.save(model.state_dict(), 'trainingmodel.model')
+        best_accuracy = test_accuracy
+        best_actual_list = flat_list_actual
+        best_prediciton_list = flat_list_prediction
+
+# Displaying the best model
+print("\n// -------------------------------------  The best model data",
+      " -------------------------------------  //")
+print("Test Accuracy: ", best_accuracy)
+bcm = confusion_matrix(best_actual_list, best_prediciton_list)
+bcr = classification_report(best_actual_list, best_prediciton_list, labels=np.unique(best_prediciton_list))
+ax = sns.heatmap(bcm, annot=True, cmap='Blues', fmt='g')
+ax.set_title('Confusion Matrix for the best model\n\n')
+ax.set_xlabel('Predicted Values')
+ax.set_ylabel('Actual Values ')
+try:
+    ax.xaxis.set_ticklabels('Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
+                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                 'Papaya', 'Potato', 'Pumpkin', 'Radish')
+    ax.yaxis.set_ticklabels('Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
+                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                 'Papaya', 'Potato', 'Pumpkin', 'Radish')
+except:
+    print()
+
+plt.savefig("Graphs/Best Model Confusion Matrix", bbox_inches='tight')
+plt.clf()
+print("Classification Matrix:\n", bcr)
+
+# Stopping and Displaying timer
+stop = timeit.default_timer()
+print()
+print("\n*** Program finished executing! ***")
+print("Program Run Time for ", num_epochs, " epochs: ", "{:.2f}".format((stop - start) / 60), " minutes")
