@@ -317,7 +317,7 @@ num_epochs = 2
 learningRate = 0.001
 numberOfFolds = 10
 weight_decay = 0.0001
-batch_size = 128
+batch_size = 64
 
 torch.manual_seed(0)
 
