@@ -1,29 +1,29 @@
+import glob
 import os
+import pathlib
 import statistics
-from keras.utils import load_img
-from keras.utils import img_to_array
+import timeit
+import warnings
 
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 import tensorflow as tf
 import torch
-import glob
 import torch.nn as nn
-from skorch.helper import SliceDataset
 import torch.optim as optim
-from torchvision.transforms import transforms
-from torch.utils.data import DataLoader
-from torch.autograd import Variable
-import torchvision
-import pathlib
-import numpy as np
-from sklearn.metrics import classification_report, confusion_matrix, plot_confusion_matrix
 import torch.utils.data as data
-import matplotlib.pyplot as plt
-import seaborn as sns
-import timeit
-from skorch import NeuralNetClassifier
-from sklearn.model_selection import KFold, cross_validate, RepeatedKFold
+import torchvision
+from keras.utils import img_to_array
+from keras.utils import load_img
+from sklearn.metrics import classification_report, confusion_matrix, plot_confusion_matrix
 from sklearn.metrics import make_scorer, accuracy_score, precision_score, recall_score, f1_score
-import warnings
+from sklearn.model_selection import KFold, cross_validate
+from skorch import NeuralNetClassifier
+from skorch.helper import SliceDataset
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
+from torchvision.transforms import transforms
 
 warnings.filterwarnings('ignore')
 
@@ -43,6 +43,7 @@ transformer = transforms.Compose([
 
 image_categories = os.listdir("Vegetables Image Classification/Train_Test_Dataset")
 path_for_images_example = "Vegetables Image Classification/Train_Test_Dataset"
+
 
 def plot_images(image_categories):
     # Create a figure
@@ -64,15 +65,19 @@ def plot_images(image_categories):
 
     plt.show()
 
+
 # Call the function
 plot_images(image_categories)
 
-# Reproducability
+
+# Reproducibility
 def set_seed(seed=31415):
     np.random.seed(seed)
     tf.random.set_seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     os.environ['TF_DETERMINISTIC_OPS'] = '1'
+
+
 set_seed()
 
 # Set Matplotlib defaults
@@ -81,7 +86,6 @@ plt.rc('axes', labelweight='bold', labelsize='Large',
        titleweight='bold', titlesize=18, titlepad=10)
 plt.rc('image', cmap='magma')
 plt.rc('xtick', labelsize=6)
-
 
 # Path for training and testing directory
 entireDataset = os.path.join("Vegetables Image Classification/Train_Test_Dataset")
@@ -160,7 +164,6 @@ def plot_result_all_folds(x_label, y_label, plot_title, train_acc, test_acc, tra
         , "10th Fold"]
     X_axis = np.arange(number_folds)
     ax = plt.gca()
-    # plt.ylim(0.40000, 1)
     plt.bar(X_axis - 0.4, train_acc, 0.1, color='#1C2DAD', label='Train_accuracy')
     plt.bar(X_axis - 0.3, test_acc, 0.1, color='#1566AD', label='Test_accuracy')
     plt.bar(X_axis - 0.2, train_prec, 0.1, color='#AD232C', label='Train_precision')
@@ -188,7 +191,6 @@ def plot_result_each_fold(x_label, y_label, plot_title, tst_precision, tst_recal
     test = [tst_precision, tst_recall, tst_f1, tst_accuracy]
     train = [tr_precision, tr_recall, tr_f1, tr_accuracy]
     ax = plt.gca()
-    # plt.ylim(0.40000, 1)
     plt.bar(X_axis - 0.2, train, 0.4, color='blue', label="Train")
     plt.bar(X_axis + 0.2, test, 0.4, color='red', label="Validation")
     plt.title(plot_title, fontsize=30)
@@ -211,7 +213,6 @@ def plot_result_aggregate(x_label, y_label, plot_title, tst_precision, tst_recal
     test = [tst_precision, tst_recall, tst_f1, tst_accuracy]
     train = [tr_precision, tr_recall, tr_f1, tr_accuracy]
     ax = plt.gca()
-    # plt.ylim(0.40000, 1)
     plt.bar(X_axis - 0.2, train, 0.4, color='orange', label="Train")
     plt.bar(X_axis + 0.2, test, 0.4, color='green', label="Validation")
     plt.title(plot_title, fontsize=30)
@@ -223,6 +224,7 @@ def plot_result_aggregate(x_label, y_label, plot_title, tst_precision, tst_recal
     fig_title = "Graphs/Aggregate Scores for " + str(number_folds) + " folds.png"
     plt.savefig(fig_title)
     plt.clf()
+
 
 class CNN(nn.Module):
     def __init__(self, num_classes=14):
@@ -284,7 +286,7 @@ class CNN(nn.Module):
         return x
 
 
-model = CNN(num_classes=14).to(device)
+model = CNN(num_classes=15).to(device)
 
 # Optimizer and loss function
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
@@ -310,12 +312,12 @@ best_prediciton_list = []
 loss_list = []
 acc_list = []
 
-# Hyper-parameters to the model
+# Hyper parameters to the model
 num_epochs = 2
 learningRate = 0.001
 numberOfFolds = 10
 weight_decay = 0.0001
-batch_size = 64
+batch_size = 128
 
 torch.manual_seed(0)
 
@@ -357,14 +359,22 @@ scores = cross_validate(net, train_sliceable, y_train, cv=kf, scoring=scoring, e
 # All the required metrics
 # print()
 # print(scores.keys())
-# print()
-print(scores)
-# print()
+print()
+print("// -----------------------------------  ", 'Train Accuracy: ' + str(scores['train_accuracy'][9]),
+      " -----------------------------------  //")
+print()
+print("// -----------------------------------  ", 'Test Accuracy: ' + str(scores['test_accuracy'][9]),
+      " -----------------------------------  //")
+print()
 # print(scores['train_accuracy'])
 # print()
 # print(scores['test_accuracy'])
+print("// -----------------------------------  ", 'The remaining metrics of for the training and the test',
+      " -----------------------------------  //")
+print(scores)
+print()
 
-# Looping through the dictionnary to produce a graph per fold
+# Looping through the dictionary to produce a graph per fold
 n = 0
 for i in range(numberOfFolds):
     n = n + 1
@@ -382,7 +392,7 @@ for i in range(numberOfFolds):
                           scores["train_accuracy"][n - 1],
                           n)
 
-# Looping through the dictionnary to produce an aggregate
+# Looping through the dictionary to produce an aggregate
 n = 0
 agg_tr_prec = []
 agg_tr_rec = []
@@ -419,7 +429,7 @@ plot_result_aggregate("Scores",
                       numberOfFolds)
 
 # Displaying overall folds performance
-title_graph = "Scores comparaison across" + str(numberOfFolds) + " folds"
+title_graph = "Scores comparison across" + str(numberOfFolds) + " folds"
 plot_result_all_folds("Scores",
                       "Value",
                       title_graph,
@@ -438,11 +448,12 @@ plot_confusion_matrix(net, train_set, y_train.reshape(-1, 1))
 plt.xlabel('Predicted Values', fontsize=10)
 plt.ylabel('Actual Values', fontsize=10)
 labels = ['Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
-                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
-                 'Papaya', 'Potato', 'Pumpkin', 'Radish']
+          'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+          'Papaya', 'Potato', 'Pumpkin', 'Radish']
 X_axis = np.arange(len(labels))
 
 plt.xticks(X_axis, labels)
+plt.rc('xtick', labelsize=6)
 
 plt.savefig("Graphs/Confusion Matrix (Trained model)")
 plt.clf()
@@ -473,12 +484,6 @@ for epoch in range(num_epochs):
 
     test_accuracy = test_accuracy / test_count
 
-    # Printing the train loss and the train accuracy
-    print()
-    # print('Train Loss: ' + str(train_loss) + ' Train Accuracy: ' + str(
-    #     train_accuracy*100) + '% Test Accuracy: ' + str(test_accuracy*100)+'%')
-    # print()
-
     # formatting actual_data and prediction_data to remove inner lists [[4,5], [9]] => [4,5,9]
     flat_list_actual = [x for xs in actual_data for x in xs]
     flat_list_prediction = [x for xs in prediction_data for x in xs]
@@ -502,11 +507,11 @@ for epoch in range(num_epochs):
     ax.set_ylabel('Actual Values ')
     try:
         ax.xaxis.set_ticklabels(['Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
-                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
-                 'Papaya', 'Potato', 'Pumpkin', 'Radish'])
+                                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                                 'Papaya', 'Potato', 'Pumpkin', 'Radish'])
         ax.yaxis.set_ticklabels(['Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
-                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
-                 'Papaya', 'Potato', 'Pumpkin', 'Radish'])
+                                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                                 'Papaya', 'Potato', 'Pumpkin', 'Radish'])
     except:
         print()
 
@@ -533,11 +538,11 @@ ax.set_xlabel('Predicted Values')
 ax.set_ylabel('Actual Values ')
 try:
     ax.xaxis.set_ticklabels('Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
-                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
-                 'Papaya', 'Potato', 'Pumpkin', 'Radish')
+                            'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                            'Papaya', 'Potato', 'Pumpkin', 'Radish')
     ax.yaxis.set_ticklabels('Bean', 'Bitter\nGourd', 'Bottle\nGourd', 'Brinjal', 'Broccoli',
-                 'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
-                 'Papaya', 'Potato', 'Pumpkin', 'Radish')
+                            'Cabbage', 'Caps-\nicum', 'Carrot', 'Cauli-\nflower', 'Cucu-\nmber',
+                            'Papaya', 'Potato', 'Pumpkin', 'Radish')
 except:
     print()
 
