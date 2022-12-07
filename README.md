@@ -1,6 +1,6 @@
-# Vegetables_Image_Classification Project for COMP 432 
+# Vegetables Image Classification Project for COMP 432 
 
-This is Vegetables_Image_Classification Project by Concordia Students team for the Machine Learning school course.
+This is Vegetables Image Classification Project by Concordia Students team for the Machine Learning school course.
 
 This project is fully implemented using Python 
 to construct a Deep Learning Convolutional Neural Network (CNN) using
