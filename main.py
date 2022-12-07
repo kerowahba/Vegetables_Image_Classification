@@ -32,7 +32,8 @@ start = timeit.default_timer()
 
 # checking for device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# Transforms by doing Data Augmentation to make sure all images have the same size
+
+# Transforms by doing Data pre-processing to make sure all images have the same size
 transformer = transforms.Compose([
     transforms.Resize((150, 150)),
     transforms.RandomHorizontalFlip(),
